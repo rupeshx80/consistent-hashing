@@ -1,23 +1,31 @@
 package main
 
 import (
-	"log"
-
-	"github.com/gin-gonic/gin"
+	"github.com/rupeshx80/consistent-hashing/pkg/cache"
 	"github.com/rupeshx80/consistent-hashing/pkg/db"
-	// "github.com/rupeshx80/go-crud/pkg/router"
+	"github.com/rupeshx80/consistent-hashing/pkg/mainserver"
+	"log"
 )
 
 func main() {
-    db.Connect()
-	r := gin.Default()
-	r.SetTrustedProxies(nil)
-//    r := router.SetupRouter()
+	// Connect DB (main server only)
+	db.Connect()
 
- r.GET("/", func(c *gin.Context) {
-        c.JSON(200, gin.H{"message":"Consistent-hashing baby"})
-    })
+	// Start 3 cache servers concurrently
+	go func() {
+		log.Println("Cache server 1 running on :6001")
+		cache.SetupRouter().Run(":6001")
+	}()
+	go func() {
+		log.Println("Cache server 2 running on :6002")
+		cache.SetupRouter().Run(":6002")
+	}()
+	go func() {
+		log.Println("Cache server 3 running on :6003")
+		cache.SetupRouter().Run(":6003")
+	}()
 
-    log.Println("Server is running on port 5000")
-	r.Run(":5000")
+	// Start main server (blocking)
+	log.Println("Main server running on :5000")
+	mainserver.SetupRouter().Run(":5000")
 }
