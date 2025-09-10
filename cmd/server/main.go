@@ -15,20 +15,8 @@ func main() {
 	ring.AddNode(":6001")
 	ring.AddNode(":6002")
 	ring.AddNode(":6003")
+	ring.AddNode(":6004")
 
-	testKeys := []string{"sigma", "amit", "rupesh", "deepak", "roshan", "devid"}
-
-
-	for _, k := range testKeys {
-
-    //hash key
-	keyHash := hashring.Hash(k)
-
-    //place hashed key into node(server)
-	node := ring.GetNode(k)
-
-	log.Printf("Key '%s' hashed to %d goes to %s", k, keyHash, node)
-}
 
 	go func() {
 		log.Println("Cache server 1 running on :6001")
@@ -43,8 +31,12 @@ func main() {
 		log.Println("Cache server 3 running on :6003")
 		cache.SetupRouter().Run(":6003")
 	}()
+	go func() {
+		log.Println("Cache server 4 running on :6004")
+		cache.SetupRouter().Run(":6004")
+	}()
 
 	log.Println("Main server running on :5000")
-	mainserver.SetupRouter().Run(":5000")
+	mainserver.SetupRouter(ring).Run(":5000")
 
 }

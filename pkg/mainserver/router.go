@@ -1,18 +1,17 @@
 package mainserver
 
 import (
-	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 )
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(ring *hashring.HashRing) *gin.Engine {
 	r := gin.Default()
-	r.SetTrustedProxies(nil)
+	service:= NewMainService(ring)
+	ctrl := NewMainController(service)
 
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Consistent-hashing baby"})
-	})
-
+	r.POST("/set", ctrl.Set)
+	r.GET("/get/:key", ctrl.Get)
 	return r
 }

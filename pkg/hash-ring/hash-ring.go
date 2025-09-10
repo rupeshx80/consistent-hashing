@@ -51,3 +51,15 @@ func (r *HashRing) GetNode(key string) string {
 
 	return r.nodeMap[r.nodes[idx]]
 }
+
+// 2025/09/10 16:26:10 Database Connected successfully.
+// Adding server :6001 at position 1776107796
+// Adding server :6002 at position 764740292
+// Adding server :6003 at position 2431217217
+// 2025/09/10 16:26:10 Key 'sigma' hashed to 2454838649 goes to :6002
+// 2025/09/10 16:26:10 Key 'amit' hashed to 1991344932 goes to :6003
+// 2025/09/10 16:26:10 Key 'rupesh' hashed to 1409592768 goes to :6001
+// 2025/09/10 16:26:10 Key 'deepak' hashed to 3507586613 goes to :6002
+// 2025/09/10 16:26:10 Key 'roshan' hashed to 4126137636 goes to :6002
+// 2025/09/10 16:26:10 Key 'devid' hashed to 2230610889 goes to :6003
+// 2025/09/10 16:26:10 Main server running on :5000
