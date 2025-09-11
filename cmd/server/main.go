@@ -1,15 +1,24 @@
 package main
 
 import (
+	"log"
+
 	"github.com/rupeshx80/consistent-hashing/pkg/cache"
 	"github.com/rupeshx80/consistent-hashing/pkg/db"
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 	"github.com/rupeshx80/consistent-hashing/pkg/mainserver"
-	"log"
+	"github.com/rupeshx80/consistent-hashing/pkg/model"
 )
 
 func main() {
 	db.Connect()
+
+	err := db.RJ.AutoMigrate(&model.KeyValue{})
+
+	if err != nil {
+		log.Fatal("Migration failed:", err)
+	}
+	log.Println("Database migrated")
 
 	ring := hashring.NewHashRing()
 	ring.AddNode(":6001")
@@ -17,6 +26,7 @@ func main() {
 	ring.AddNode(":6003")
 	ring.AddNode(":6004")
 
+	repo := mainserver.NewKeyValueRepository()
 
 	go func() {
 		log.Println("Cache server 1 running on :6001")
@@ -37,6 +47,6 @@ func main() {
 	}()
 
 	log.Println("Main server running on :5000")
-	mainserver.SetupRouter(ring).Run(":5000")
+	mainserver.SetupRouter(ring, repo).Run(":5000")
 
 }

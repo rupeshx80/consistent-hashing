@@ -6,9 +6,9 @@ import (
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 )
 
-func SetupRouter(ring *hashring.HashRing) *gin.Engine {
+func SetupRouter(ring *hashring.HashRing, repo *KeyValueRepository) *gin.Engine {
 	r := gin.Default()
-	service:= NewMainService(ring)
+	service:= NewMainService(ring, repo)
 	ctrl := NewMainController(service)
 
 	r.POST("/set", ctrl.Set)
