@@ -13,17 +13,15 @@ func NewKeyValueRepository() *KeyValueRepository {
 	return &KeyValueRepository{}
 }
 
-// Create or Update KeyValue
 func (r *KeyValueRepository) UpsertKeyValue(key, value string) error {
 	var kv model.KeyValue
 	result := db.RJ.Where("key = ?", key).First(&kv)
 	if result.Error == nil {
-		// update
+		//updates value
 		kv.Value = value
 		return db.RJ.Save(&kv).Error
 	}
 
-	// insert
 	kv = model.KeyValue{Key: key, Value: value}
 	return db.RJ.Create(&kv).Error
 }
@@ -37,7 +35,6 @@ func (r *KeyValueRepository) GetKeyValue(key string) (*model.KeyValue, error) {
 	return &kv, nil
 }
 
-// Delete KeyValue
 func (r *KeyValueRepository) DeleteKeyValue(key string) error {
 	return db.RJ.Where("key = ?", key).Delete(&model.KeyValue{}).Error
 }
