@@ -14,7 +14,9 @@ func NewKeyValueRepository() *KeyValueRepository {
 }
 
 func (r *KeyValueRepository) UpsertKeyValue(key, value string) error {
+
 	var kv model.KeyValue
+	
 	result := db.RJ.Where("key = ?", key).First(&kv)
 	if result.Error == nil {
 		//updates value
@@ -29,6 +31,7 @@ func (r *KeyValueRepository) UpsertKeyValue(key, value string) error {
 func (r *KeyValueRepository) GetKeyValue(key string) (*model.KeyValue, error) {
 	var kv model.KeyValue
 	result := db.RJ.Where("key = ?", key).First(&kv)
+
 	if result.Error != nil {
 		return nil, errors.New("key not found in DB")
 	}
@@ -36,5 +39,6 @@ func (r *KeyValueRepository) GetKeyValue(key string) (*model.KeyValue, error) {
 }
 
 func (r *KeyValueRepository) DeleteKeyValue(key string) error {
+
 	return db.RJ.Where("key = ?", key).Delete(&model.KeyValue{}).Error
 }

@@ -1,7 +1,6 @@
 package mainserver
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +36,6 @@ func (mc *MainController) Get(c *gin.Context) {
 	key := c.Param("key")
 
 	value, err := mc.service.Get(key)
-	log.Printf("whats in mc.service.Get(key) : value=%v, err=%v", value, err)
 	
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
