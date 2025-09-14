@@ -3,18 +3,21 @@ package hashring
 import (
 	"crypto/sha1"
 	"fmt"
+	"log"
 	"sort"
 )
 
 type HashRing struct {
 	nodes       []int     
 	nodeMap     map[int]string
+	replicas int
 }
 
-func NewHashRing() *HashRing {
+func NewHashRing(replicas int) *HashRing {
 	return &HashRing{
 		nodes:   []int{},
 		nodeMap: make(map[int]string),
+		replicas: replicas,
 	}
 }
 
@@ -27,12 +30,22 @@ func Hash(s string) int {
 }
 
 func (r *HashRing) AddNode(node string) {
-	h := Hash(node)
-	fmt.Printf("Adding server %s at position %d\n", node, h)
-	r.nodes = append(r.nodes, h)
-	r.nodeMap[h] = node
+
+	 h := Hash(node)
+    fmt.Printf("Adding server %s at position %d\n", node, h)
+
+	for i:= 0; i< r.replicas; i++{
+         vNode := fmt.Sprintf("%s#%d", node, i)
+        vh := Hash(vNode)
+
+        log.Printf("Adding virtual node %s at position %d", vNode, vh)
+
+        r.nodes = append(r.nodes, vh)
+        r.nodeMap[vh] = node
+	}
 	sort.Ints(r.nodes) 
 }
+
 
 func (r *HashRing) GetNode(key string) string {
 

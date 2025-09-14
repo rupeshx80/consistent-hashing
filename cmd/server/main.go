@@ -20,7 +20,7 @@ func main() {
 	}
 	log.Println("Database migrated")
 
-	ring := hashring.NewHashRing()
+	ring := hashring.NewHashRing(3)
 	ring.AddNode(":6001")
 	ring.AddNode(":6002")
 	ring.AddNode(":6003")

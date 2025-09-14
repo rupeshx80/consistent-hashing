@@ -33,7 +33,10 @@ func (s *MainService) Set(body map[string]string) error {
 		return fmt.Errorf("failed to save to DB: %w", err)
 	}
 
+	log.Printf("[DB] Key='%s' persisted with Value='%s'", key, value)
+
 	node := s.ring.GetNode(key)
+	log.Printf("[CONSISTENT-HASH] Key='%s' mapped to Cache Node='%s'", key, node)
 
 	b, err := json.Marshal(body)
 
@@ -45,6 +48,8 @@ func (s *MainService) Set(body map[string]string) error {
 	if err != nil {
 		return fmt.Errorf("failed to forward: %w", err)
 	}
+
+	log.Printf("SET - Key: '%s' -> Cache Server: %s", key, node)
 
 	defer resp.Body.Close()
 
@@ -58,6 +63,7 @@ func (s *MainService) Get(key string) (string, error) {
 	}
 
 	node := s.ring.GetNode(key)
+	log.Printf("[CONSISTENT-HASH] Looking up Key='%s' -> Node='%s'", key, node)
 
 	resp, err := http.Get("http://127.0.0.1" + node + "/get/" + key)
 	if err == nil && resp.StatusCode == http.StatusOK {
@@ -66,6 +72,7 @@ func (s *MainService) Get(key string) (string, error) {
 
 		var kv map[string]string
 		if err := json.Unmarshal(data, &kv); err != nil {
+			log.Printf("CACHE HIT - Key '%s' from server %s", key, node)
 			return "", fmt.Errorf("failed to parse cache response: %w", err)
 		}
 		return kv["value"], nil
@@ -78,6 +85,7 @@ func (s *MainService) Get(key string) (string, error) {
 		return "", fmt.Errorf("not found in cache or DB: %w", dbErr)
 	}
 
+	log.Printf("[DB-HIT] Key='%s' found in DB with Value='%s'", key, kv.Value)
 
 	body := map[string]string{"key": kv.Key, "value": string(kv.Value)}
 
