@@ -7,6 +7,6 @@ import (
 type KeyValue struct {
 	gorm.Model
 	Key   string `gorm:"uniqueIndex; not null"`
-	Value string `gorm:"type:text"` // use string if plain text
+	Value string `gorm:"type:text"` 
 
 }

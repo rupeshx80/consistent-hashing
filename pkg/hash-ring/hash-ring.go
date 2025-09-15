@@ -31,11 +31,11 @@ func Hash(s string) int {
 
 func (r *HashRing) AddNode(node string) {
 
-	 h := Hash(node)
+     h := Hash(node)
     fmt.Printf("Adding server %s at position %d\n", node, h)
 
 	for i:= 0; i< r.replicas; i++{
-         vNode := fmt.Sprintf("%s#%d", node, i)
+        vNode := fmt.Sprintf("%s#%d", node, i)
         vh := Hash(vNode)
 
         log.Printf("Adding virtual node %s at position %d", vNode, vh)
@@ -47,10 +47,10 @@ func (r *HashRing) AddNode(node string) {
 }
 
 
-func (r *HashRing) GetNode(key string) string {
+func (r *HashRing) GetNode(key string) (string, string) {
 
 	if len(r.nodes) == 0 {
-		return ""
+		return "", ""
 	}
 	h := Hash(key)
 
@@ -62,17 +62,12 @@ func (r *HashRing) GetNode(key string) string {
 		idx = 0 
 	}
 
-	return r.nodeMap[r.nodes[idx]]
+	vnodeHash := r.nodes[idx]
+    realNode := r.nodeMap[vnodeHash]
+
+    // vnode is just hash number, but we can display like "hash->realNode"
+    vnodeID := fmt.Sprintf("VNode[%d]", vnodeHash)
+
+    return vnodeID, realNode
 }
 
-// 2025/09/10 16:26:10 Database Connected successfully.
-// Adding server :6001 at position 1776107796
-// Adding server :6002 at position 764740292
-// Adding server :6003 at position 2431217217
-// 2025/09/10 16:26:10 Key 'sigma' hashed to 2454838649 goes to :6002
-// 2025/09/10 16:26:10 Key 'amit' hashed to 1991344932 goes to :6003
-// 2025/09/10 16:26:10 Key 'rupesh' hashed to 1409592768 goes to :6001
-// 2025/09/10 16:26:10 Key 'deepak' hashed to 3507586613 goes to :6002
-// 2025/09/10 16:26:10 Key 'roshan' hashed to 4126137636 goes to :6002
-// 2025/09/10 16:26:10 Key 'devid' hashed to 2230610889 goes to :6003
-// 2025/09/10 16:26:10 Main server running on :5000
