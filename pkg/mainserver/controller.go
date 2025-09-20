@@ -44,3 +44,19 @@ func (mc *MainController) Get(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"value": value})
 }
+
+func (mc *MainController) GetPreferenceList(c *gin.Context) {
+	key := c.Query("key")
+	if key == "" {
+		c.JSON(400, gin.H{"error": "key is required"})
+		return
+	}
+
+	list, err := mc.service.GetPreferenceList(key)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"preferenceList": list})
+}

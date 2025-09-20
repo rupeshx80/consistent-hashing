@@ -38,20 +38,26 @@ func (s *MainService) Set(body map[string]string) error {
 	vnode,node := s.ring.GetNode(key)
 	log.Printf("[CONSISTENT-HASH] Key='%s' first mapped to %s -> Real Cache Node='%s'", key, vnode, node)
 
-	b, err := json.Marshal(body)
+	b, _ := json.Marshal(body)
 
-	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
-	}
+	  // Get preference list for replication
+    preferenceList := s.ring.GetPreferenceList(key)
 
-	resp, err := http.Post("http://127.0.0.1"+node+"/set", "application/json", bytes.NewBuffer(b))
-	if err != nil {
-		return fmt.Errorf("failed to forward: %w", err)
-	}
+    for _, node := range preferenceList {
+        go func(node string) {
+            resp, err := http.Post("http://127.0.0.1"+node+"/set", "application/json", bytes.NewBuffer(b))
+            if err != nil {
+                log.Printf("[REPLICATION-FAIL] Key='%s' -> Node='%s' | Error=%v", key, node, err)
+                return
+            }
+            resp.Body.Close()
+            log.Printf("[REPLICATED] Key='%s' -> Node='%s'", key, node)
+        }(node)
+    }
+
 
 	log.Printf("SET - Key: '%s' -> Cache Server: %s", key, node)
 
-	defer resp.Body.Close()
 
 	return nil
 }
@@ -107,4 +113,18 @@ func (s *MainService) Get(key string) (string, error) {
     }()
 
     return string(kv.Value), nil
+}
+
+func (s *MainService) GetPreferenceList(key string) ([]string, error) {
+	if key == "" {
+		return nil, fmt.Errorf("key is required")
+	}
+
+	preferenceList := s.ring.GetPreferenceList(key)
+	if len(preferenceList) == 0 {
+		return nil, fmt.Errorf("no nodes available for key: %s", key)
+	}
+
+	log.Printf("[CONSISTENT-HASH] Preference List for Key='%s': %v", key, preferenceList)
+	return preferenceList, nil
 }

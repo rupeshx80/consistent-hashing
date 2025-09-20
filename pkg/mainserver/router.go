@@ -13,5 +13,6 @@ func SetupRouter(ring *hashring.HashRing, repo *KeyValueRepository) *gin.Engine 
 
 	r.POST("/set", ctrl.Set)
 	r.GET("/get/:key", ctrl.Get)
+	r.GET("/preference-list", ctrl.GetPreferenceList)
 	return r
 }

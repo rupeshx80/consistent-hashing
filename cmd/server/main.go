@@ -20,11 +20,12 @@ func main() {
 	}
 	log.Println("Database migrated")
 
-	ring := hashring.NewHashRing(3)
-	ring.AddNode(":6001")
-	ring.AddNode(":6002")
-	ring.AddNode(":6003")
-	ring.AddNode(":6004")
+	ring := hashring.NewHashRing(3,3)
+	ring.AddNode(":6001",1)
+	ring.AddNode(":6002",1)
+	ring.AddNode(":6003",2)
+	ring.AddNode(":6004",1)
+
 
 	repo := mainserver.NewKeyValueRepository()
 
