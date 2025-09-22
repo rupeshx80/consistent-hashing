@@ -14,7 +14,7 @@ func NewMainController(service *MainService) *MainController {
 	return &MainController{service: service}
 }
 
-func (mc *MainController) Set(c *gin.Context) {
+func (mc *MainController) Put(c *gin.Context) {
 
 	var body map[string]string
 
@@ -23,26 +23,26 @@ func (mc *MainController) Set(c *gin.Context) {
 		return
 	}
 
-	if err := mc.service.Set(body); err != nil {
+	if err := mc.service.Put(body); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "stored successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "new version stored successfully"})
 }
 
 func (mc *MainController) Get(c *gin.Context) {
 
 	key := c.Param("key")
 
-	value, err := mc.service.Get(key)
+	versions, err := mc.service.Get(key)
 	
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"value": value})
+	c.JSON(http.StatusOK, gin.H{"versions": versions})
 }
 
 func (mc *MainController) GetPreferenceList(c *gin.Context) {

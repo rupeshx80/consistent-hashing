@@ -11,7 +11,7 @@ func SetupRouter(ring *hashring.HashRing, repo *KeyValueRepository) *gin.Engine 
 	service:= NewMainService(ring, repo)
 	ctrl := NewMainController(service)
 
-	r.POST("/set", ctrl.Set)
+	r.PUT("/set", ctrl.Put)
 	r.GET("/get/:key", ctrl.Get)
 	r.GET("/preference-list", ctrl.GetPreferenceList)
 	return r

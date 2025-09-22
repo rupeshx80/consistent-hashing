@@ -13,32 +13,32 @@ func NewKeyValueRepository() *KeyValueRepository {
 	return &KeyValueRepository{}
 }
 
-func (r *KeyValueRepository) UpsertKeyValue(key, value string) error {
 
-	var kv model.KeyValue
-	
-	result := db.RJ.Where("key = ?", key).First(&kv)
-	if result.Error == nil {
-		//updates value
-		kv.Value = value
-		return db.RJ.Save(&kv).Error
+func (r *KeyValueRepository) PutVersion(key, value, vectorClock string) error{
+	kv := model.KeyValue {
+		Key: key,
+		Value: value,
+		VectorClock: vectorClock,
 	}
 
-	kv = model.KeyValue{Key: key, Value: value}
 	return db.RJ.Create(&kv).Error
+
 }
 
-func (r *KeyValueRepository) GetKeyValue(key string) (*model.KeyValue, error) {
-	var kv model.KeyValue
-	result := db.RJ.Where("key = ?", key).First(&kv)
-
+func (r *KeyValueRepository) GetAllVersions(key string) ([]model.KeyValue, error) {
+	var versions []model.KeyValue
+	result := db.RJ.Where("key = ?", key).Order("created_at asc").Find(&versions)
 	if result.Error != nil {
+		return nil, result.Error
+	}
+	if len(versions) == 0 {
 		return nil, errors.New("key not found in DB")
 	}
-	return &kv, nil
+	return versions, nil
 }
 
-func (r *KeyValueRepository) DeleteKeyValue(key string) error {
 
+
+func (r *KeyValueRepository) DeleteAllVersions(key string) error {
 	return db.RJ.Where("key = ?", key).Delete(&model.KeyValue{}).Error
 }
