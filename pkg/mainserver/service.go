@@ -28,6 +28,7 @@ func NewMainService(ring *hashring.HashRing, repo *KeyValueRepository) *MainServ
 	return &MainService{ring, repo}
 }
 
+// mergeMapMax merges integer counters, taking max per node
 func mergeMapMax(dst, src map[string]int) {
 	for k, v := range src {
 		if cur, ok := dst[k]; !ok || v > cur {
@@ -38,10 +39,13 @@ func mergeMapMax(dst, src map[string]int) {
 
 func parseVC(vc string) map[string]int {
 	out := map[string]int{}
+
 	if vc == "" {
 		return out
 	}
+
 	_ = json.Unmarshal([]byte(vc), &out) 
+
 	return out
 }
 
@@ -57,16 +61,20 @@ func (s *MainService) buildNewVectorClock(key string, nodeID string, clientVC st
     nodeID = strings.TrimPrefix(nodeID, ":")
 
 	dbVersions, err := s.repository.GetAllVersions(key)
+
 	if err == nil {
 		for _, kv := range dbVersions {
 			vcMap := parseVC(kv.VectorClock)
 			mergeMapMax(merged, vcMap)
 		}
 	}
+
 	if clientVC != "" {
+		//here all dbs vector clock merges with client vc
 		mergeMapMax(merged, parseVC(clientVC))
 	}
-
+    
+	//nodes counter increment
 	if _, ok := merged[nodeID]; !ok {
 		merged[nodeID] = 1
 	} else {
@@ -81,6 +89,7 @@ func (s *MainService) Put(body map[string]string) error {
 	key := body["key"]
 	value := body["value"]
 	clientVC := body["vectorClock"]
+
 	if key == "" {
 		return fmt.Errorf("key is required")
 	}
@@ -89,6 +98,7 @@ func (s *MainService) Put(body map[string]string) error {
 	nodeID := node //use node string as node identifier for VC counters
 
 	newVC, err := s.buildNewVectorClock(key, nodeID, clientVC)
+
 	if err != nil {
 		return fmt.Errorf("failed to build vector clock: %w", err)
 	}
@@ -96,6 +106,7 @@ func (s *MainService) Put(body map[string]string) error {
 	if err := s.repository.PutVersion(key, value, newVC); err != nil {
 		return fmt.Errorf("failed to save new version: %w", err)
 	}
+
 	log.Printf("[DB] Key='%s' new version persisted with VC='%s'", key, newVC)
 
 	replicaBody := map[string]string{
@@ -111,7 +122,7 @@ func (s *MainService) Put(body map[string]string) error {
 			resp, err := http.Post("http://127.0.0.1"+n+"/set", "application/json", bytes.NewBuffer(b))
 			if err != nil {
 				log.Printf("[REPLICATION-FAIL] Key='%s' -> Node='%s' | Error=%v", key, n, err)
-				return
+				return 
 			}
 			resp.Body.Close()
 			log.Printf("[REPLICATED] Key='%s' -> Node='%s'", key, n)

@@ -12,7 +12,8 @@ import (
 
 func main() {
 	db.Connect()
-
+     
+	//Noet: fix this later, remove unique index
 	err := db.RJ.Migrator().DropIndex(&model.KeyValue{}, "idx_key_values_key")
 	if err != nil {
 		log.Printf("Warning: Could not drop unique index: %v", err)

@@ -27,10 +27,13 @@ func (r *KeyValueRepository) PutVersion(key, value, vectorClock string) error{
 
 func (r *KeyValueRepository) GetAllVersions(key string) ([]model.KeyValue, error) {
 	var versions []model.KeyValue
+
 	result := db.RJ.Where("key = ?", key).Order("created_at asc").Find(&versions)
+
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	
 	if len(versions) == 0 {
 		return nil, errors.New("key not found in DB")
 	}
