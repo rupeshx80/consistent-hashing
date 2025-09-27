@@ -99,6 +99,9 @@ func (s *MainService) Put(body map[string]string) error {
 
 	newVC, err := s.buildNewVectorClock(key, nodeID, clientVC)
 
+	log.Printf("[DB] Key='%s' Whats the clientVC='%s'",key, clientVC)
+
+
 	if err != nil {
 		return fmt.Errorf("failed to build vector clock: %w", err)
 	}
@@ -114,9 +117,11 @@ func (s *MainService) Put(body map[string]string) error {
 		"value":       value,
 		"vectorClock": newVC,
 	}
+
 	b, _ := json.Marshal(replicaBody)
 
 	preferenceList := s.ring.GetPreferenceList(key)
+	
 	for _, n := range preferenceList {
 		go func(n string) {
 			resp, err := http.Post("http://127.0.0.1"+n+"/set", "application/json", bytes.NewBuffer(b))

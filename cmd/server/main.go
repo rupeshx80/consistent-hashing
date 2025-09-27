@@ -8,6 +8,7 @@ import (
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 	"github.com/rupeshx80/consistent-hashing/pkg/mainserver"
 	"github.com/rupeshx80/consistent-hashing/pkg/model"
+	// "github.com/rupeshx80/consistent-hashing/pkg/quorum"
 )
 
 func main() {
@@ -35,6 +36,8 @@ func main() {
 	ring.AddNode(":6004", 1)
 
 	repo := mainserver.NewKeyValueRepository()
+	// qConfig := quorum.NewQuorumConfig(4, 2, 2) // N=4 nodes, R=2, W=2
+	// qManager := quorum.NewQuorumManager(qConfig)
 
 	go func() {
 		log.Println("Cache server 1 running on :6001")
