@@ -2,7 +2,7 @@ package mainserver
 
 import (
 	"net/http"
-
+     "log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,19 +32,27 @@ func (mc *MainController) Put(c *gin.Context) {
 }
 
 func (mc *MainController) Get(c *gin.Context) {
-
 	key := c.Param("key")
 
 	versions, err := mc.service.Get(key)
 	
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[CONTROLLER] Error getting key='%s', err=%v", key, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"versions": versions})
-}
+	if len(versions) == 0 {
+		log.Printf("[CONTROLLER] No versions found for key='%s'", key)
+		c.JSON(http.StatusNotFound, gin.H{"error": "key not found"})
+		return
+	}
 
+	// CRITICAL FIX: Return versions directly as array, not wrapped in object
+	// This matches what quorum system expects: []VersionedValue
+	log.Printf("[CONTROLLER] Returning %d versions for key='%s'", len(versions), key)
+	c.JSON(http.StatusOK, versions)
+}
 func (mc *MainController) GetPreferenceList(c *gin.Context) {
 	key := c.Query("key")
 	if key == "" {

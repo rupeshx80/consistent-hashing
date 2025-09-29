@@ -1,15 +1,17 @@
 package mainserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+	"context"
+	"time"
 
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
+	"github.com/rupeshx80/consistent-hashing/pkg/quorum"
 )
 
 // VersionedValue returned to clients
@@ -22,10 +24,15 @@ type VersionedValue struct {
 type MainService struct {
 	ring       *hashring.HashRing
 	repository *KeyValueRepository
+	qManager   *quorum.QuorumManager
 }
 
-func NewMainService(ring *hashring.HashRing, repo *KeyValueRepository) *MainService {
-	return &MainService{ring, repo}
+func NewMainService(ring *hashring.HashRing, repo *KeyValueRepository,qManager *quorum.QuorumManager) *MainService {
+	return &MainService{
+		ring:       ring,
+		repository: repo,
+		qManager:   qManager,
+	}
 }
 
 // mergeMapMax merges integer counters, taking max per node
@@ -85,6 +92,7 @@ func (s *MainService) buildNewVectorClock(key string, nodeID string, clientVC st
 }
 
 
+// Put persists locally (coordinator) and writes to replicas using the quorum manager.
 func (s *MainService) Put(body map[string]string) error {
 	key := body["key"]
 	value := body["value"]
@@ -95,81 +103,93 @@ func (s *MainService) Put(body map[string]string) error {
 	}
 
 	_, node := s.ring.GetNode(key)
-	nodeID := node //use node string as node identifier for VC counters
+	nodeID := node // use node string as node identifier for VC counters
 
 	newVC, err := s.buildNewVectorClock(key, nodeID, clientVC)
 
-	log.Printf("[DB] Key='%s' Whats the clientVC='%s'",key, clientVC)
-
+	log.Printf("[DB] Key='%s' clientVC='%s'", key, clientVC)
 
 	if err != nil {
 		return fmt.Errorf("failed to build vector clock: %w", err)
 	}
 
+	// persist locally first (coordinator write)
 	if err := s.repository.PutVersion(key, value, newVC); err != nil {
 		return fmt.Errorf("failed to save new version: %w", err)
 	}
 
-	log.Printf("[DB] Key='%s' new version persisted with VC='%s'", key, newVC)
-
-	replicaBody := map[string]string{
-		"key":         key,
-		"value":       value,
-		"vectorClock": newVC,
-	}
-
-	b, _ := json.Marshal(replicaBody)
-
+	// Build replica list (exclude coordinator)
 	preferenceList := s.ring.GetPreferenceList(key)
-	
+	replicas := make([]string, 0, len(preferenceList))
 	for _, n := range preferenceList {
-		go func(n string) {
-			resp, err := http.Post("http://127.0.0.1"+n+"/set", "application/json", bytes.NewBuffer(b))
-			if err != nil {
-				log.Printf("[REPLICATION-FAIL] Key='%s' -> Node='%s' | Error=%v", key, n, err)
-				return 
-			}
-			resp.Body.Close()
-			log.Printf("[REPLICATED] Key='%s' -> Node='%s'", key, n)
-		}(n)
+		if n == node {
+			continue // skip coordinator
+		}
+		replicas = append(replicas, n)
 	}
 
-	log.Printf("PUT - Key: '%s' -> Coordinator Node: %s", key, node)
+	// Issue write quorum request to replicas and wait for quorum
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if len(replicas) > 0 {
+		if err := s.qManager.WriteQuorum(ctx, replicas, key, value, newVC); err != nil {
+			// If quorum fails, return error so caller can decide
+			return fmt.Errorf("write quorum failed: %w", err)
+		}
+	}
+
+	log.Printf("PUT - Key='%s' Coordinator=%s VC=%s", key, node, newVC)
 	return nil
 }
 
-
+// Get attempts a quorum read first, then falls back to cache single node, then DB.
 func (s *MainService) Get(key string) ([]VersionedValue, error) {
 	if key == "" {
 		return nil, fmt.Errorf("key is required")
 	}
 
-	_, node := s.ring.GetNode(key)
-	log.Printf("[CONSISTENT-HASH] Looking up Key='%s' -> Real Node='%s'", key, node)
+	preferenceList := s.ring.GetPreferenceList(key)
+	if len(preferenceList) == 0 {
+		return nil, fmt.Errorf("no nodes available for key: %s", key)
+	}
 
-	resp, err := http.Get("http://127.0.0.1" + node + "/get/" + key)
-	if err == nil && resp.StatusCode == http.StatusOK {
+	// Use context with timeout for read quorum
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1) Try quorum read from preference list
+	qres, err := s.qManager.ReadQuorum(ctx, preferenceList, key)
+	if err == nil && len(qres) > 0 {
+		// Convert quorum.VersionedValue -> local VersionedValue
+		out := make([]VersionedValue, 0, len(qres))
+		for _, v := range qres {
+			out = append(out, VersionedValue{
+				Value:       v.Value,
+				VectorClock: v.VectorClock,
+				CreatedAt:   v.CreatedAt,
+			})
+		}
+		return out, nil
+	}
+
+	// 2) Fallback to cache-first (single-node) then DB if cache miss (original behavior)
+	_, node := s.ring.GetNode(key)
+	resp, err2 := http.Get("http://127.0.0.1" + node + "/get/" + key)
+	if err2 == nil && resp.StatusCode == http.StatusOK {
 		defer resp.Body.Close()
-		data, err := io.ReadAll(resp.Body)
-		if err == nil {
-			var versions []VersionedValue
-			if err := json.Unmarshal(data, &versions); err == nil {
-				log.Printf("[CACHE-HIT] Key='%s' from cache node %s", key, node)
-				return versions, nil
-			}
-			log.Printf("[CACHE-ERROR] Failed to parse JSON from %s: %v", node, err)
-		} else {
-			log.Printf("[CACHE-ERROR] Failed to read body from %s: %v", node, err)
+		data, _ := io.ReadAll(resp.Body)
+		var versions []VersionedValue
+		if json.Unmarshal(data, &versions) == nil {
+			return versions, nil
 		}
 	}
-	log.Printf("[CACHE-MISS] Key='%s' not found in cache node %s", key, node)
 
+	// 3) Fallback to DB
 	dbVersions, dbErr := s.repository.GetAllVersions(key)
 	if dbErr != nil {
-		log.Printf("[DB-MISS] Key='%s' not found in DB", key)
 		return nil, fmt.Errorf("not found in cache or DB: %w", dbErr)
 	}
-
 	var out []VersionedValue
 	for _, kv := range dbVersions {
 		out = append(out, VersionedValue{
@@ -178,23 +198,11 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 			CreatedAt:   kv.CreatedAt.String(),
 		})
 	}
-
-	go func() {
-		b, _ := json.Marshal(out)
-		_, cacheErr := http.Post("http://127.0.0.1"+node+"/set", "application/json", bytes.NewBuffer(b))
-		if cacheErr != nil {
-			log.Printf("[CACHE-REPOPULATE-FAIL] Key='%s' -> Node='%s' | Error=%v", key, node, cacheErr)
-		} else {
-			log.Printf("[CACHE-REPOPULATE] Key='%s' synced to Cache Node='%s'", key, node)
-		}
-	}()
-
 	return out, nil
 }
 
-
 func (s *MainService) GetPreferenceList(key string) ([]string, error) {
-    
+
 	if key == "" {
 		return nil, fmt.Errorf("key is required")
 	}

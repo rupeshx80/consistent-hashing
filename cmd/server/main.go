@@ -8,7 +8,7 @@ import (
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 	"github.com/rupeshx80/consistent-hashing/pkg/mainserver"
 	"github.com/rupeshx80/consistent-hashing/pkg/model"
-	// "github.com/rupeshx80/consistent-hashing/pkg/quorum"
+	"github.com/rupeshx80/consistent-hashing/pkg/quorum"
 )
 
 func main() {
@@ -32,12 +32,12 @@ func main() {
 	ring := hashring.NewHashRing(3, 3)
 	ring.AddNode(":6001", 1)
 	ring.AddNode(":6002", 1)
-	ring.AddNode(":6003", 2)
+	ring.AddNode(":6003", 1)
 	ring.AddNode(":6004", 1)
 
 	repo := mainserver.NewKeyValueRepository()
-	// qConfig := quorum.NewQuorumConfig(4, 2, 2) // N=4 nodes, R=2, W=2
-	// qManager := quorum.NewQuorumManager(qConfig)
+	qConfig := quorum.NewQuorumConfig(3, 2, 2) //this follows from paper
+	qManager := quorum.NewQuorumManager(qConfig)
 
 	go func() {
 		log.Println("Cache server 1 running on :6001")
@@ -58,6 +58,6 @@ func main() {
 	}()
 
 	log.Println("Main server running on :5000")
-	mainserver.SetupRouter(ring, repo).Run(":5000")
+	mainserver.SetupRouter(ring, repo,qManager ).Run(":5000")
 
 }
