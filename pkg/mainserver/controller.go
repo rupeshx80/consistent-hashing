@@ -48,11 +48,10 @@ func (mc *MainController) Get(c *gin.Context) {
 		return
 	}
 
-	// CRITICAL FIX: Return versions directly as array, not wrapped in object
-	// This matches what quorum system expects: []VersionedValue
 	log.Printf("[CONTROLLER] Returning %d versions for key='%s'", len(versions), key)
 	c.JSON(http.StatusOK, versions)
 }
+
 func (mc *MainController) GetPreferenceList(c *gin.Context) {
 	key := c.Query("key")
 	if key == "" {

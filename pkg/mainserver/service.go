@@ -92,7 +92,7 @@ func (s *MainService) buildNewVectorClock(key string, nodeID string, clientVC st
 }
 
 
-// Put persists locally (coordinator) and writes to replicas using the quorum manager.
+//this persists locally (coordinator) and writes to replicas using the quorum manager.
 func (s *MainService) Put(body map[string]string) error {
 	key := body["key"]
 	value := body["value"]
@@ -158,10 +158,8 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 1) Try quorum read from preference list
 	qres, err := s.qManager.ReadQuorum(ctx, preferenceList, key)
 	if err == nil && len(qres) > 0 {
-		// Convert quorum.VersionedValue -> local VersionedValue
 		out := make([]VersionedValue, 0, len(qres))
 		for _, v := range qres {
 			out = append(out, VersionedValue{
@@ -173,7 +171,6 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 		return out, nil
 	}
 
-	// 2) Fallback to cache-first (single-node) then DB if cache miss (original behavior)
 	_, node := s.ring.GetNode(key)
 	resp, err2 := http.Get("http://127.0.0.1" + node + "/get/" + key)
 	if err2 == nil && resp.StatusCode == http.StatusOK {
@@ -185,7 +182,6 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 		}
 	}
 
-	// 3) Fallback to DB
 	dbVersions, dbErr := s.repository.GetAllVersions(key)
 	if dbErr != nil {
 		return nil, fmt.Errorf("not found in cache or DB: %w", dbErr)

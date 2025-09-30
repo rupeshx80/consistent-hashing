@@ -175,6 +175,7 @@ func (qm *QuorumManager) ReadQuorum(ctx context.Context, nodes []string, key str
 	// Send read requests to all nodes in preference list
 	for _, node := range nodes {
 		log.Printf("[READ] Sending read request to node=%s", node)
+		
 		wg.Add(1)
 		go func(n string) {
 			defer wg.Done()

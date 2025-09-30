@@ -36,11 +36,18 @@ func (cc *CacheController) Set(ctx *gin.Context) {
 func (cc *CacheController) Get(ctx *gin.Context) {
 	key := ctx.Param("key")
 
-	val, ok := cc.service.GetKey(key)
-	
-	if ok {
-		ctx.JSON(http.StatusOK, gin.H{"value": val})
-	} else {
+	versions, err := cc.service.GetAllVersions(key)
+	if err != nil {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "key not found"})
+		return
 	}
+
+	if len(versions) == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "key not found"})
+		return
+	}
+
+	// Always return as an array of versions
+	ctx.JSON(http.StatusOK, versions)
 }
+
