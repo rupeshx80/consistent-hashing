@@ -38,7 +38,7 @@ type QuorumManager struct {
 func NewQuorumManager(config *QuorumConfig) *QuorumManager {
 	return &QuorumManager{
 		config:     config,
-		httpClient: &http.Client{Timeout: 2 * time.Second},
+		httpClient: &http.Client{Timeout: 5 * time.Second},
 		timeout:    5 * time.Second,
 	}
 }
@@ -175,7 +175,7 @@ func (qm *QuorumManager) ReadQuorum(ctx context.Context, nodes []string, key str
 	// Send read requests to all nodes in preference list
 	for _, node := range nodes {
 		log.Printf("[READ] Sending read request to node=%s", node)
-		
+
 		wg.Add(1)
 		go func(n string) {
 			defer wg.Done()

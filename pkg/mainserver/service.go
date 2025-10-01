@@ -1,20 +1,18 @@
 package mainserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"strings"
-	"context"
 	"time"
 
+	"github.com/rupeshx80/consistent-hashing/pkg/cache"
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 	"github.com/rupeshx80/consistent-hashing/pkg/quorum"
 )
 
-// VersionedValue returned to clients
 type VersionedValue struct {
 	Value       string `json:"value"`
 	VectorClock string `json:"vectorClock"`
@@ -22,16 +20,18 @@ type VersionedValue struct {
 }
 
 type MainService struct {
-	ring       *hashring.HashRing
-	repository *KeyValueRepository
-	qManager   *quorum.QuorumManager
+	ring        *hashring.HashRing
+	repository  *KeyValueRepository
+	qManager    *quorum.QuorumManager
+	cacheClient *cache.CacheClient
 }
 
-func NewMainService(ring *hashring.HashRing, repo *KeyValueRepository,qManager *quorum.QuorumManager) *MainService {
+func NewMainService(ring *hashring.HashRing, repo *KeyValueRepository, qManager *quorum.QuorumManager, cacheClient *cache.CacheClient) *MainService {
 	return &MainService{
-		ring:       ring,
-		repository: repo,
-		qManager:   qManager,
+		ring:        ring,
+		repository:  repo,
+		qManager:    qManager,
+		cacheClient: cacheClient,
 	}
 }
 
@@ -51,7 +51,7 @@ func parseVC(vc string) map[string]int {
 		return out
 	}
 
-	_ = json.Unmarshal([]byte(vc), &out) 
+	_ = json.Unmarshal([]byte(vc), &out)
 
 	return out
 }
@@ -65,7 +65,7 @@ func (s *MainService) buildNewVectorClock(key string, nodeID string, clientVC st
 	merged := map[string]int{}
 
 	nodeID = strings.TrimSpace(nodeID)
-    nodeID = strings.TrimPrefix(nodeID, ":")
+	nodeID = strings.TrimPrefix(nodeID, ":")
 
 	dbVersions, err := s.repository.GetAllVersions(key)
 
@@ -80,7 +80,7 @@ func (s *MainService) buildNewVectorClock(key string, nodeID string, clientVC st
 		//here all dbs vector clock merges with client vc
 		mergeMapMax(merged, parseVC(clientVC))
 	}
-    
+
 	//nodes counter increment
 	if _, ok := merged[nodeID]; !ok {
 		merged[nodeID] = 1
@@ -91,9 +91,9 @@ func (s *MainService) buildNewVectorClock(key string, nodeID string, clientVC st
 	return serializeVC(merged), nil
 }
 
-
-//this persists locally (coordinator) and writes to replicas using the quorum manager.
+// this persists locally (coordinator) and writes to replicas using the quorum manager.
 func (s *MainService) Put(body map[string]string) error {
+
 	key := body["key"]
 	value := body["value"]
 	clientVC := body["vectorClock"]
@@ -103,50 +103,73 @@ func (s *MainService) Put(body map[string]string) error {
 	}
 
 	_, node := s.ring.GetNode(key)
-	nodeID := node // use node string as node identifier for VC counters
+	nodeID := node //use node string as node identifier for VC counters
 
 	newVC, err := s.buildNewVectorClock(key, nodeID, clientVC)
-
 	log.Printf("[DB] Key='%s' clientVC='%s'", key, clientVC)
 
 	if err != nil {
 		return fmt.Errorf("failed to build vector clock: %w", err)
 	}
 
-	// persist locally first (coordinator write)
+	log.Printf("[PUT] Key='%s' clientVC='%s' newVC='%s'", key, clientVC, newVC)
+
+	//writes to cache first (fast path) -non-fatal if fails
+	if s.cacheClient != nil {
+		_ = s.cacheClient.WriteToCache(key, value, newVC)
+	}
+
+	//then we persist locally to DB (coordinator write)
 	if err := s.repository.PutVersion(key, value, newVC); err != nil {
 		return fmt.Errorf("failed to save new version: %w", err)
 	}
 
-	// Build replica list (exclude coordinator)
+	//Build replica list (exclude coordinator)
 	preferenceList := s.ring.GetPreferenceList(key)
 	replicas := make([]string, 0, len(preferenceList))
 	for _, n := range preferenceList {
 		if n == node {
-			continue // skip coordinator
+			continue
 		}
 		replicas = append(replicas, n)
 	}
 
-	// Issue write quorum request to replicas and wait for quorum
+	//Issue write quorum request to replicas and wait for quorum
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if len(replicas) > 0 {
 		if err := s.qManager.WriteQuorum(ctx, replicas, key, value, newVC); err != nil {
-			// If quorum fails, return error so caller can decide
 			return fmt.Errorf("write quorum failed: %w", err)
 		}
 	}
 
-	log.Printf("PUT - Key='%s' Coordinator=%s VC=%s", key, node, newVC)
+	log.Printf("[PUT] SUCCESS - Key='%s' Coordinator=%s VC=%s", key, node, newVC)
 	return nil
 }
 
-// Get attempts a quorum read first, then falls back to cache single node, then DB.
 func (s *MainService) Get(key string) ([]VersionedValue, error) {
 	if key == "" {
 		return nil, fmt.Errorf("key is required")
+	}
+
+	if s.cacheClient != nil {
+		cacheVersions, err := s.cacheClient.ReadFromCache(key)
+		if err == nil && len(cacheVersions) > 0 {
+			log.Printf("[GET] Cache HIT for key='%s'", key)
+			
+			// Convert cache response to VersionedValue
+			result := make([]VersionedValue, len(cacheVersions))
+			for i, cv := range cacheVersions {
+				result[i] = VersionedValue{
+					Value:       cv.Value,
+					VectorClock: cv.VectorClock,
+					CreatedAt:   cv.CreatedAt,
+				}
+			}
+			return result, nil
+		}
+		log.Printf("[GET] Cache MISS for key='%s', trying quorum/DB", key)
 	}
 
 	preferenceList := s.ring.GetPreferenceList(key)
@@ -154,11 +177,12 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 		return nil, fmt.Errorf("no nodes available for key: %s", key)
 	}
 
-	// Use context with timeout for read quorum
+	//context with timeout for read quorum
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	qres, err := s.qManager.ReadQuorum(ctx, preferenceList, key)
+
 	if err == nil && len(qres) > 0 {
 		out := make([]VersionedValue, 0, len(qres))
 		for _, v := range qres {
@@ -168,24 +192,15 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 				CreatedAt:   v.CreatedAt,
 			})
 		}
+		log.Printf("[GET] Quorum READ success for key='%s'", key)
 		return out, nil
-	}
-
-	_, node := s.ring.GetNode(key)
-	resp, err2 := http.Get("http://127.0.0.1" + node + "/get/" + key)
-	if err2 == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		data, _ := io.ReadAll(resp.Body)
-		var versions []VersionedValue
-		if json.Unmarshal(data, &versions) == nil {
-			return versions, nil
-		}
 	}
 
 	dbVersions, dbErr := s.repository.GetAllVersions(key)
 	if dbErr != nil {
-		return nil, fmt.Errorf("not found in cache or DB: %w", dbErr)
+		return nil, fmt.Errorf("not found in cache, quorum, or DB: %w", dbErr)
 	}
+
 	var out []VersionedValue
 	for _, kv := range dbVersions {
 		out = append(out, VersionedValue{
@@ -194,6 +209,8 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 			CreatedAt:   kv.CreatedAt.String(),
 		})
 	}
+
+	log.Printf("[GET] DB fallback for key='%s', found %d versions", key, len(dbVersions))
 	return out, nil
 }
 

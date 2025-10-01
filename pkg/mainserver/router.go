@@ -1,15 +1,15 @@
 package mainserver
 
 import (
-
 	"github.com/gin-gonic/gin"
+	"github.com/rupeshx80/consistent-hashing/pkg/cache"
 	"github.com/rupeshx80/consistent-hashing/pkg/hash-ring"
 	"github.com/rupeshx80/consistent-hashing/pkg/quorum"
 )
 
-func SetupRouter(ring *hashring.HashRing, repo *KeyValueRepository,qManager *quorum.QuorumManager) *gin.Engine {
+func SetupRouter(ring *hashring.HashRing, repo *KeyValueRepository, qManager *quorum.QuorumManager, cacheClient *cache.CacheClient) *gin.Engine {
 	r := gin.Default()
-	service:= NewMainService(ring, repo,qManager)
+	service := NewMainService(ring, repo, qManager, cacheClient)
 	ctrl := NewMainController(service)
 
 	r.PUT("/set", ctrl.Put)

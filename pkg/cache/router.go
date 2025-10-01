@@ -11,6 +11,7 @@ func SetupRouter() *gin.Engine {
 
 	r.POST("/set", ctrl.Set)
 	r.GET("/get/:key", ctrl.Get)
+	r.DELETE("/delete/:key", ctrl.Delete)
 
 	return r
 }
