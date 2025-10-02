@@ -60,19 +60,24 @@ func (cc *CacheController) Get(ctx *gin.Context) {
 		return
 	}
 	
-	// Convert to response format matching mainserver's VersionedValue
-	response := make([]map[string]string, len(versions))
+	//deduplicate by vector clock - keep only the first occurrence of each vector clock
+	seenVectorClocks := make(map[string]bool)
+	var uniqueVersions []map[string]string
 	
-	for i, v := range versions {
-		response[i] = map[string]string{
-			"value":       v.Value,
-			"vectorClock": v.VectorClock,
-			"createdAt":   v.CreatedAt.Format("2006-01-02 15:04:05.999999999 -0700 MST"),
+	for _, v := range versions {
+		if !seenVectorClocks[v.VectorClock] {
+			seenVectorClocks[v.VectorClock] = true
+			uniqueVersions = append(uniqueVersions, map[string]string{
+				"value":       v.Value,
+				"vectorClock": v.VectorClock,
+				"createdAt":   v.CreatedAt.Format("2006-01-02 15:04:05.999999999 -0700 MST"),
+			})
 		}
 	}
 	
-	ctx.JSON(http.StatusOK, response)
-	log.Printf("[CACHE-CONTROLLER] Returned %d versions for key='%s'", len(versions), key)
+	ctx.JSON(http.StatusOK, uniqueVersions)
+	log.Printf("[CACHE-CONTROLLER] Returned %d unique versions (from %d total) for key='%s'", 
+		len(uniqueVersions), len(versions), key)
 }
 
 func (cc *CacheController) Delete(ctx *gin.Context) {
