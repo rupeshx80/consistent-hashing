@@ -6,6 +6,7 @@ func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
 	repo := NewCacheRepository()
+	
 	svc := NewCacheService(repo)
 	ctrl := NewCacheController(svc)
 

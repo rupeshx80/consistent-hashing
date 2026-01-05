@@ -148,6 +148,7 @@ func (s *MainService) Put(body map[string]string) error {
 	return nil
 }
 
+
 func (s *MainService) Get(key string) ([]VersionedValue, error) {
 	if key == "" {
 		return nil, fmt.Errorf("key is required")
@@ -157,7 +158,7 @@ func (s *MainService) Get(key string) ([]VersionedValue, error) {
 		cacheVersions, err := s.cacheClient.ReadFromCache(key)
 		if err == nil && len(cacheVersions) > 0 {
 			log.Printf("[GET] Cache HIT for key='%s'", key)
-			
+
 			// Convert cache response to VersionedValue
 			result := make([]VersionedValue, len(cacheVersions))
 			for i, cv := range cacheVersions {
@@ -229,3 +230,4 @@ func (s *MainService) GetPreferenceList(key string) ([]string, error) {
 	log.Printf("[CONSISTENT-HASH] Preference List for Key='%s': %v", key, preferenceList)
 	return preferenceList, nil
 }
+

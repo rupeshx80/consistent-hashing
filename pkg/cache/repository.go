@@ -54,3 +54,4 @@ func (r *CacheRepository) Delete(key string) {
 	defer r.mu.Unlock()
 	delete(r.data, key)
 }
+

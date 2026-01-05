@@ -40,6 +40,14 @@ func (r *KeyValueRepository) GetAllVersions(key string) ([]model.KeyValue, error
 	return versions, nil
 }
 
+func (r *KeyValueRepository) GetAllKeys() ([]string, error) {
+    var keys []string
+    result := db.RJ.Model(&model.KeyValue{}).Distinct("key").Pluck("key", &keys)
+    if result.Error != nil {
+        return nil, result.Error
+    }
+    return keys, nil
+}
 
 
 func (r *KeyValueRepository) DeleteAllVersions(key string) error {

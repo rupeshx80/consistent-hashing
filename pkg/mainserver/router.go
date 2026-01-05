@@ -10,6 +10,10 @@ import (
 func SetupRouter(ring *hashring.HashRing, repo *KeyValueRepository, qManager *quorum.QuorumManager, cacheClient *cache.CacheClient) *gin.Engine {
 	r := gin.Default()
 	service := NewMainService(ring, repo, qManager, cacheClient)
+	
+	//rehydrate cache from DB
+	InitializeCache(service)
+
 	ctrl := NewMainController(service)
 
 	r.PUT("/set", ctrl.Put)
